@@ -1,0 +1,33 @@
+{
+  "name": "slider",
+  "version": "1.0.0",
+  "description": "js slider",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon index.js --ignore public/",
+    "dev": "webpack -wd",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "production": "webpack -p"
+  },
+  "keywords": [
+    "js",
+    "es2015",
+    "css"
+  ],
+  "author": "codingcircus",
+  "license": "ISC",
+  "dependencies": {
+    "webcomponentsjs": "^1.0.2"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.24.1",
+    "babel-core": "^6.24.1",
+    "babel-loader": "^7.0.0",
+    "css-loader": "^0.28.0",
+    "express": "^4.15.2",
+    "node-sass-middleware": "^0.11.0",
+    "nodemon": "^1.11.0",
+    "webpack": "^2.4.1",
+    "webpack-dev-server": "^2.4.5"
+  }
+}
