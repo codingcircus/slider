@@ -41,6 +41,7 @@ export default class Slider extends HTMLElement {
       this.nextSlide,
     ];
     this.visibleSlides.map(slide => this.slideInner.appendChild(slide));
+    this.prepareToEnd = false;
 
     // Set to current view
     this.setPosX(this.width);
@@ -111,6 +112,7 @@ export default class Slider extends HTMLElement {
   _sliderReleased(ev) {
     if (this.dragging) {
 
+      this.prepareToEnd = true;
       if (Math.abs(this.mouseDelta) >= this.dragThreshold) {
         this._deactivatePreviewLink(this._getPreviewLink(this.currentIndex));
 
@@ -119,29 +121,30 @@ export default class Slider extends HTMLElement {
           this.currentIndex = this.nextIndex;
           this._updateView(this.previousIndex, this.currentIndex, this.nextIndex);
           this._moveSlideInner(this.currentOffsetX + this.mouseDelta - this.width);
-          console.log(this.currentOffsetX + this.mouseDelta - this.width);
+          // console.log(this.currentOffsetX + this.mouseDelta - this.width);
         } else {
           this.currentIndex = this.previousIndex;
           this._updateView(this.previousIndex, this.currentIndex, this.nextIndex);
           this._moveSlideInner(this.currentOffsetX + this.mouseDelta + this.width);
-          console.log(this.currentOffsetX + this.mouseDelta + this.width);
+          // console.log(this.currentOffsetX + this.mouseDelta + this.width);
         }
 
         this._activatePreviewLink(this._getPreviewLink(this.currentIndex));
       }
       
       // Reset Dom Indicator
-      this.dragging = false;
-      this.mouseDelta = 0;
 
       window.requestAnimationFrame(() => {
+        this.dragging = false;
+        this.prepareToEnd = false;
+        this.mouseDelta = 0;
         this._moveToSlide(this.currentIndex);
       });
     }
   }
 
   _update() {
-    if (this.dragging) {
+    if (this.dragging && !this.prepareToEnd) {
       this._moveSlideInner(this.currentOffsetX + this.mouseDelta);
     }
     requestAnimationFrame(this._update);
