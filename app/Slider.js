@@ -29,6 +29,11 @@ export default class Slider extends HTMLElement {
     this.dragPageX = 0;
     this.currentOffsetX = 0;
     this.mouseDelta = 0;
+
+    // Pseudo Slides for infinite dragging
+    this.beforePseudoSlide = null;
+    this.afterPseudoSlide = null;
+
     this.appendChild(getSliderControls(this.slides));
     this._sliderNavClicked = this._sliderNavClicked.bind(this);
     this._sliderClicked = this._sliderClicked.bind(this);
@@ -87,12 +92,23 @@ export default class Slider extends HTMLElement {
       // Reset Dom Indicator
       delete this.dataset.dragging;
 
-      if (Math.abs(this.mouseDelta) >= this.width * .4) {
+      if (Math.abs(this.mouseDelta) >= this.dragNextSlideThreshold) {
         this._deactivatePreviewLink(this._getPreviewLink(this.currentSlide));
-        this.currentSlide = this.mouseDelta > 0 ? Math.min(this.currentSlide + 1, this.slides.length - 1) : Math.max(this.currentSlide - 1, 0);
+        const newCurrentSlide = this.mouseDelta > 0 ? Math.min(this.currentSlide + 1, this.slides.length - 1) : Math.max(this.currentSlide - 1, 0);
         this._activatePreviewLink(this._getPreviewLink(this.currentSlide));
+        
+        if (newCurrentSlide !== this.currentSlide) {
+          this.currentSlide = newCurrentSlide;  
+          // Makes infinite draggin possible
+          this._updatePseudoSlide();
+        }
       }
-      this._moveToSlide(this.currentSlide);
+
+
+      // Wait for updating of pseudoSlide
+      window.requestAnimationFrame(() => {
+        this._moveToSlide(this.currentSlide);
+      });
     }
   }
 
@@ -125,7 +141,9 @@ export default class Slider extends HTMLElement {
   }
 
   _deactivatePreviewLink(previewLink) {
-    delete previewLink.dataset.active;
+    if (previewLink.dataset.active) {
+      delete previewLink.dataset.active;
+    }
   }
 
   _activatePreviewLink(previewLink) {
@@ -142,11 +160,86 @@ export default class Slider extends HTMLElement {
     this._moveSlideInner(this.currentOffsetX);
   }
 
+  /**
+   * Pseudo Slide Functionality
+   */
+  _updatePseudoSlide() {
+    const shouldInsertBefore = this._shouldInsertBeforePseudoSlide();
+    const shouldInsertAfter = this._shouldInsertAfterPseudoSlide();
+
+    // Check if pseudo slide needs to be added at beginning
+    if (shouldInsertBefore) {
+      this.beforePseudoSlide = this._insertBeforePseudoSlide(this.beforePseudoSlide); 
+    } else {
+      this.beforePseudoSlide = this._resetPseudoSlide(this.beforePseudoSlide);
+    }
+
+    // Check if pseudo slide needs to be added at end
+    if (shouldInsertAfter) {
+      this.afterPseudoSlide = this._insertAfterPseudoSlide(this.afterPseudoSlide);
+    } else {
+      this.afterPseudoSlide = this._resetPseudoSlide(this.afterPseudoSlide);
+    }
+
+    return shouldInsertBefore || shouldInsertAfter;
+  }
+
+  _insertBeforePseudoSlide(slide) {
+    // Check if slide is already set
+    if (slide) {
+      return slide;
+    }
+
+    // Clone last slide and insert into parent
+    const newSlide = this.lastSlide.cloneNode(true);
+    this.firstSlide.parentNode.insertBefore(newSlide, this.firstSlide);
+    return newSlide;
+  }
+
+  _insertAfterPseudoSlide(slide) {
+    // Check if slide is already set
+    if (slide) {
+      return slide;
+    }
+
+    // Clone last slide and insert into parent
+    const newSlide = this.firstSlide.cloneNode(true);
+    this.lastSlide.parentNode.appendChild(newSlide);
+    return newSlide;
+  }
+
+  _resetPseudoSlide(slide) {
+    if (slide !== null) {
+      slide.parentNode.removeChild(slide);
+    }
+    return null;
+  }
+
+  _shouldInsertBeforePseudoSlide() {
+    return this.currentSlide === 0;
+  }
+
+  _shouldInsertAfterPseudoSlide() {
+    return this.currentSlide === this.slides.length;
+  }
+
+  get dragNextSlideThreshold() {
+    return 250;
+  }
+
   get maxDragWidth() {
     return this.width * (this.slides.length - 1);
   }
 
   get width() {
     return this.getBoundingClientRect().width;
+  }
+
+  get firstSlide() {
+    return this.slides[0];
+  }
+
+  get lastSlide() {
+    return this.slides[this.slides.length - 1];
   }
 }

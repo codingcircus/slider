@@ -8,6 +8,7 @@ cc-slider {
   display: block;
   width: 100vw;
   height: 100vh;
+  max-height: 640px;
   position: relative;
   overflow: hidden;
   cursor: move;
@@ -22,17 +23,29 @@ cc-slider {
 .slider__inner {
   display: flex;
   width: 100vw;
+  height: 100%;
   transition: transform .3s ease-out;
 }
 
 .slide {
   display: block;
+  height: 100%;
   margin: 0;
 }
 
 .slide__image {
   display: block;
   width: 100vw;
+  height: 100%;
+  background-color: #E82C0C;
+}
+
+.slide__image--dark {
+  background: #E80C7A;
+}
+
+.slide__image--light {
+  background: #FF0DFF;
 }
 
 .slider__controls {
