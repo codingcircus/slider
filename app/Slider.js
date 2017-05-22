@@ -113,7 +113,7 @@ export default class Slider extends HTMLElement {
         ev.preventDefault();
         
         // Save starting pageX
-        this.pageX = ev.pageX;
+        this.startPageX = ev.pageX;
 
         // Set Dom Indicator
         this.dragging = true;
@@ -125,7 +125,7 @@ export default class Slider extends HTMLElement {
 
   _sliderMoved(ev) {
     if (this.dragging) {
-      this.mouseDelta = this.pageX - ev.pageX;
+      this.mouseDelta = this.startPageX - ev.pageX;
     }
   }
 
@@ -166,7 +166,7 @@ export default class Slider extends HTMLElement {
       window.requestAnimationFrame(() => {
         this.dragging = false;
         this.mouseDelta = 0;
-        this._moveToSlide(this.currentIndex);
+        this.translateX = this.width;
       });
   }
 
@@ -282,11 +282,6 @@ export default class Slider extends HTMLElement {
 
   _activatePreviewLink(previewLink) {
     previewLink.dataset.active = '';
-  }
-
-  _moveToSlide(elem) {
-    this.pageX = elem * this.getBoundingClientRect().width;
-    this.translateX = this.width;
   }
 
   get maxDragWidth() {
