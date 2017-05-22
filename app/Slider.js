@@ -1,16 +1,16 @@
 function getSliderPreviews(acc, item, key) {
   return `${acc}<li class="slider__preview">
-    <a href="#" class="slider__preview-link"${key === 0 ? ' data-active' : ''} data-slide="${key}">${key}. Bild</a>
+    <a href="#" class="slider__control slider__preview-link"${key === 0 ? ' data-active' : ''} data-slide="${key}">${key}. Bild</a>
   </li>`;
 }
 
 function getSliderControlsInner(slides) {
   return `
-  <a data-direction="previous" href="#" class="slider__arrow-control slider__previous">Vorheriges Bild</a>
+  <a data-direction="previous" href="#" class="slider__control slider__arrow-control slider__previous">Vorheriges Bild</a>
   <ul class="slider__previews">
     ${slides.reduce(getSliderPreviews, '')}
   </ul>
-  <a data-direction="next" href="#" class="slider__arrow-control slider__next">Nächstes Bild</a>
+  <a data-direction="next" href="#" class="slider__control slider__arrow-control slider__next">Nächstes Bild</a>
   `;
 }
 
@@ -29,23 +29,14 @@ function getSliderControls(slides) {
 
 export default class Slider extends HTMLElement {
   createdCallback() {
+    // Default Values
+    this.currentIndex = 0;
+    this.mouseDelta = 0;
+
+    // DOM Elements Values
     this.slides = Array.from(this.querySelectorAll('.slide'));
     this.slideInner = this.querySelector('.slider__inner');
-    this.posX = 0;
-    this.preparing = false;
-
-    // Remove Slides from View, cause we will only have enough view "slots" to always show the previous, current and next slide
-    this.slides.map(slide => slide.parentNode.removeChild(slide));
-    this.currentIndex = 0;
-
-    // Create Visible Slides
     this.visibleSlides = [createSlide(), createSlide(), createSlide()];
-    this.visibleSlides.map(slide => this.slideInner.appendChild(slide));
-    this._initView();
-
-    this.currentOffsetX = this.width;
-    this.mouseDelta = 0;
-    this.appendChild(getSliderControls(this.slides));
 
     // Bind Events to class
     this._sliderNavClicked = this._sliderNavClicked.bind(this);
@@ -53,6 +44,31 @@ export default class Slider extends HTMLElement {
     this._sliderMoved = this._sliderMoved.bind(this);
     this._sliderReleased = this._sliderReleased.bind(this);
     this._update = this._update.bind(this);
+    
+    // Create Visible Slides
+    this._initView();
+  }
+
+  _initView() {
+    // Generate Slider Controls
+    this.appendChild(getSliderControls(this.slides));
+
+    // Remove Slides from View, cause we will only have enough view "slots" to always show the previous, current and next slide
+    this.slides.map(slide => slide.parentNode.removeChild(slide));
+    this.visibleSlides.map(slide => this.slideInner.appendChild(slide));
+
+    // Update View to show current Slide in View
+    this.rendering = true;
+    window.requestAnimationFrame(() => {
+      this._updateView([this.previousIndex, this.currentIndex, this.nextIndex]);
+      this.translateX = this.width;
+
+      window.requestAnimationFrame(() => {
+        this.rendering = false;
+      });
+    });
+
+    // Start Listening for updates
     requestAnimationFrame(this._update);
   }
 
@@ -87,8 +103,6 @@ export default class Slider extends HTMLElement {
 
     // Check if Click Target is part of slider
     while(target) {
-
-      console.log(target);
 
       // Slider Navigation has it's own event Listener
       if (target.classList.contains('slider__preview-link')) {
@@ -141,8 +155,7 @@ export default class Slider extends HTMLElement {
     window.requestAnimationFrame(() => {
       this._updateView([this.previousIndex, this.currentIndex, this.nextIndex]);
       this.mouseDelta += offsetView;
-      this.translateX = this.currentOffsetX + this.mouseDelta;
-
+      this.translateX = this.width + this.mouseDelta;
       this._resetAfterDrag();
     });
 
@@ -159,7 +172,7 @@ export default class Slider extends HTMLElement {
 
   _update() {
     if (this.dragging) {
-      this.translateX = this.currentOffsetX + this.mouseDelta;
+      this.translateX = this.width + this.mouseDelta;
     }
     requestAnimationFrame(this._update);
   }
@@ -167,54 +180,37 @@ export default class Slider extends HTMLElement {
   _sliderNavClicked(ev) {
     const { target } = ev;
 
-    if (this._targetIsNavElement(target)) {
+    if (this._targetIsSliderControl(target)) {
       ev.preventDefault();
       ev.stopPropagation();
 
       // Prevent Double Click
-      if (this.preparing) {
+      if (this.rendering) {
         return false;
       }
 
-      const slide = this._getSlideFromNavElement(target);
+      const slide = this._getSlideFromSliderControl(target);
       
       if (this.currentIndex !== slide) {
         this._deactivatePreviewLink(this._getPreviewLink(this.currentIndex));
         this._activatePreviewLink(this._getPreviewLink(slide));
 
         // Calculated Value
-        this.preparing = true;
+        this.rendering = true;
         if (this.currentIndex > slide) {
-          window.requestAnimationFrame(() => {
-            this._prepareToMove((this.visibleSlides.length - 1) * this.width, slide, slide, this.currentIndex);
-            window.requestAnimationFrame(() => {
-              this._cleanupAfterMove(slide);
-            });
-          });
+          this._prepareToMove(slide, (this.visibleSlides.length - 1) * this.width, slide, slide, this.currentIndex);
         } else {
-          window.requestAnimationFrame(() => {
-            this._prepareToMove(0, this.currentIndex, slide, slide)
-            window.requestAnimationFrame(() => {
-              this._cleanupAfterMove(slide);
-            });
-          });
+          this._prepareToMove(slide, 0, this.currentIndex, slide, slide)
         }
       }
     }
   }
 
-  _targetIsNavElement(target) {
-    const validNames = [
-      'slider__preview-link',
-      'slider__arrow-control',
-    ];
-
-    return validNames.reduce((acc, item) => {
-      return acc || target.classList.contains(item);
-    }, false);
+  _targetIsSliderControl(target) {
+    return target.classList.contains('slider__control');
   }
 
-  _getSlideFromNavElement(target) {
+  _getSlideFromSliderControl(target) {
 
     // Slide Previews
     if (typeof target.dataset.slide !== 'undefined') {
@@ -236,9 +232,15 @@ export default class Slider extends HTMLElement {
     return 0;
   }
 
-  _prepareToMove(translateX, first, middle, last) {
-    this.translateX = translateX;
-    this._updateView([first, middle, last]);
+  _prepareToMove(newCurrentIndex, translateX, first, middle, last) {
+    window.requestAnimationFrame(() => {
+      this.translateX = translateX;
+      this._updateView([first, middle, last]);
+
+      window.requestAnimationFrame(() => {
+        this._cleanupAfterMove(newCurrentIndex);
+      });
+    });
   }
 
   /**
@@ -246,7 +248,7 @@ export default class Slider extends HTMLElement {
    * @param {number} newCurrentIndex 
    */
   _cleanupAfterMove(newCurrentIndex) {
-    this.preparing = false;
+    this.rendering = false;
     this.translateX = this.width;
     this.currentIndex = newCurrentIndex;
     this._updateView([this.previousIndex, this.currentIndex, this.nextIndex]);
@@ -285,18 +287,6 @@ export default class Slider extends HTMLElement {
   _moveToSlide(elem) {
     this.pageX = elem * this.getBoundingClientRect().width;
     this.translateX = this.width;
-  }
-
-  _initView() {
-    this.preparing = true;
-    window.requestAnimationFrame(() => {
-      this._updateView([this.previousIndex, this.currentIndex, this.nextIndex]);
-      this.translateX = this.width;
-
-      window.requestAnimationFrame(() => {
-        this.preparing = false;
-      });
-    });
   }
 
   get maxDragWidth() {
@@ -339,15 +329,15 @@ export default class Slider extends HTMLElement {
     }
   }
 
-  get preparing() {
-    return this.getAttribute('preparing');
+  get rendering() {
+    return this.getAttribute('rendering');
   }
 
-  set preparing(value) {
+  set rendering(value) {
     if (value) {
-      this.setAttribute('preparing', value);
+      this.setAttribute('rendering', value);
     } else {
-      this.removeAttribute('preparing');
+      this.removeAttribute('rendering');
     }
   }
 

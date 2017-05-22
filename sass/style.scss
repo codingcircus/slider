@@ -14,7 +14,7 @@ cc-slider {
   cursor: move;
   
   &[dragging],
-  &[preparing] {
+  &[rendering] {
     .slider__inner {
       transition-duration: 0s;
     }
