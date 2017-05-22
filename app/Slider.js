@@ -6,12 +6,18 @@ function getSliderPreviews(acc, item, key) {
 
 function getSliderControlsInner(slides) {
   return `
-  <a href="#" class="slider__arrow-control slider__previous">Vorheriges Bild</a>
+  <a data-direction="previous" href="#" class="slider__arrow-control slider__previous">Vorheriges Bild</a>
   <ul class="slider__previews">
     ${slides.reduce(getSliderPreviews, '')}
   </ul>
-  <a href="#" class="slider__arrow-control slider__next">Nächstes Bild</a>
+  <a data-direction="next" href="#" class="slider__arrow-control slider__next">Nächstes Bild</a>
   `;
+}
+
+function createSlide() {
+  const slide = document.createElement('div');
+  slide.classList.add('slide');
+  return slide;
 }
 
 function getSliderControls(slides) {
@@ -26,35 +32,27 @@ export default class Slider extends HTMLElement {
     this.slides = Array.from(this.querySelectorAll('.slide'));
     this.slideInner = this.querySelector('.slider__inner');
     this.posX = 0;
+    this.preparing = false;
 
     // Remove Slides from View, cause we will only have enough view "slots" to always show the previous, current and next slide
     this.slides.map(slide => slide.parentNode.removeChild(slide));
     this.currentIndex = 0;
 
     // Create Visible Slides
-    this.previousSlide = this._createSlide();
-    this.currentSlide = this._createSlide();
-    this.nextSlide = this._createSlide();
-    this.visibleSlides = [
-      this.previousSlide,
-      this.currentSlide,
-      this.nextSlide,
-    ];
+    this.visibleSlides = [createSlide(), createSlide(), createSlide()];
     this.visibleSlides.map(slide => this.slideInner.appendChild(slide));
-    this.prepareToEnd = false;
-
-    // Set to current view
-    this.setPosX(this.width);
+    this._initView();
 
     this.currentOffsetX = this.width;
     this.mouseDelta = 0;
     this.appendChild(getSliderControls(this.slides));
+
+    // Bind Events to class
     this._sliderNavClicked = this._sliderNavClicked.bind(this);
     this._sliderClicked = this._sliderClicked.bind(this);
     this._sliderMoved = this._sliderMoved.bind(this);
     this._sliderReleased = this._sliderReleased.bind(this);
     this._update = this._update.bind(this);
-
     requestAnimationFrame(this._update);
   }
 
@@ -63,10 +61,19 @@ export default class Slider extends HTMLElement {
     this.addEventListener('mousedown', this._sliderClicked);
     this.addEventListener('mousemove', this._sliderMoved);
     this.addEventListener('mouseup', this._sliderReleased);
+
+    // In case Mouse leaves window, while dragging
+    document.addEventListener('mouseout', this._sliderReleased);
   }
 
   detachedCallback() {
-    console.log('Detached');
+    this.removeEventListener('click', this._sliderNavClicked);
+    this.removeEventListener('mousedown', this._sliderClicked);
+    this.removeEventListener('mousemove', this._sliderMoved);
+    this.removeEventListener('mouseup', this._sliderReleased);
+
+    // In case Mouse leaves window, while dragging
+    document.removeEventListener('mouseout', this._sliderReleased);
   }
 
   _createSlide() {
@@ -78,7 +85,12 @@ export default class Slider extends HTMLElement {
   _sliderClicked(ev) {
     let { target } = ev;
 
+    // Check if Click Target is part of slider
     while(target) {
+
+      console.log(target);
+
+      // Slider Navigation has it's own event Listener
       if (target.classList.contains('slider__preview-link')) {
         return;
       }
@@ -87,7 +99,7 @@ export default class Slider extends HTMLElement {
         ev.preventDefault();
         
         // Save starting pageX
-        this.posX = ev.pageX;
+        this.pageX = ev.pageX;
 
         // Set Dom Indicator
         this.dragging = true;
@@ -97,82 +109,167 @@ export default class Slider extends HTMLElement {
     }
   }
 
-  // Since the slider inner is always offsetted to the middle, we need to add width
-  _getEvPageX(pageX) {
-    return pageX + this.width;
-  }
-
   _sliderMoved(ev) {
-    // console.log(this.dataset);
     if (this.dragging) {
-      this.mouseDelta = this.posX - ev.pageX;
+      this.mouseDelta = this.pageX - ev.pageX;
     }
   }
 
   _sliderReleased(ev) {
     if (this.dragging) {
 
-      this.prepareToEnd = true;
+      // Check if slider was dragged far enough to switch slide
       if (Math.abs(this.mouseDelta) >= this.dragThreshold) {
         this._deactivatePreviewLink(this._getPreviewLink(this.currentIndex));
 
-        // Update View
+        // Next or previous Slide
         if (this.mouseDelta > 0) {
-          this.currentIndex = this.nextIndex;
-          this._updateView(this.previousIndex, this.currentIndex, this.nextIndex);
-          this._moveSlideInner(this.currentOffsetX + this.mouseDelta - this.width);
-          // console.log(this.currentOffsetX + this.mouseDelta - this.width);
+          this._updateSliderAfterRelease(this.nextIndex, -this.width);
         } else {
-          this.currentIndex = this.previousIndex;
-          this._updateView(this.previousIndex, this.currentIndex, this.nextIndex);
-          this._moveSlideInner(this.currentOffsetX + this.mouseDelta + this.width);
-          // console.log(this.currentOffsetX + this.mouseDelta + this.width);
+          this._updateSliderAfterRelease(this.previousIndex, this.width);
         }
+      } else {
 
-        this._activatePreviewLink(this._getPreviewLink(this.currentIndex));
+        // Always reset Dragging
+        this._resetAfterDrag();
       }
-      
-      // Reset Dom Indicator
-
-      window.requestAnimationFrame(() => {
-        this.dragging = false;
-        this.prepareToEnd = false;
-        this.mouseDelta = 0;
-        this._moveToSlide(this.currentIndex);
-      });
     }
   }
 
+  _updateSliderAfterRelease(newCurrentIndex, offsetView) {
+    this.currentIndex = newCurrentIndex;
+    window.requestAnimationFrame(() => {
+      this._updateView([this.previousIndex, this.currentIndex, this.nextIndex]);
+      this.mouseDelta += offsetView;
+      this.translateX = this.currentOffsetX + this.mouseDelta;
+
+      this._resetAfterDrag();
+    });
+
+    this._activatePreviewLink(this._getPreviewLink(this.currentIndex));
+  }
+
+  _resetAfterDrag() {
+      window.requestAnimationFrame(() => {
+        this.dragging = false;
+        this.mouseDelta = 0;
+        this._moveToSlide(this.currentIndex);
+      });
+  }
+
   _update() {
-    if (this.dragging && !this.prepareToEnd) {
-      this._moveSlideInner(this.currentOffsetX + this.mouseDelta);
+    if (this.dragging) {
+      this.translateX = this.currentOffsetX + this.mouseDelta;
     }
     requestAnimationFrame(this._update);
   }
 
   _sliderNavClicked(ev) {
     const { target } = ev;
-    if (target.classList.contains('slider__preview-link')) {
+
+    if (this._targetIsNavElement(target)) {
       ev.preventDefault();
       ev.stopPropagation();
 
-      const { slide } = target.dataset;
+      // Prevent Double Click
+      if (this.preparing) {
+        return false;
+      }
+
+      const slide = this._getSlideFromNavElement(target);
       
       if (this.currentIndex !== slide) {
         this._deactivatePreviewLink(this._getPreviewLink(this.currentIndex));
         this._activatePreviewLink(this._getPreviewLink(slide));
-        this.currentIndex = slide;
-        this._moveToSlide(this.currentIndex);
+
+        // Calculated Value
+        this.preparing = true;
+        if (this.currentIndex > slide) {
+          window.requestAnimationFrame(() => {
+            this._prepareToMove((this.visibleSlides.length - 1) * this.width, slide, slide, this.currentIndex);
+            window.requestAnimationFrame(() => {
+              this._cleanupAfterMove(slide);
+            });
+          });
+        } else {
+          window.requestAnimationFrame(() => {
+            this._prepareToMove(0, this.currentIndex, slide, slide)
+            window.requestAnimationFrame(() => {
+              this._cleanupAfterMove(slide);
+            });
+          });
+        }
       }
     }
   }
 
-  _updateView(previous, current, next) {
-    this.previousSlide.innerHTML = this.slides[previous].innerHTML;
-    this.currentSlide.innerHTML = this.slides[current].innerHTML;
-    this.nextSlide.innerHTML = this.slides[next].innerHTML;
+  _targetIsNavElement(target) {
+    const validNames = [
+      'slider__preview-link',
+      'slider__arrow-control',
+    ];
+
+    return validNames.reduce((acc, item) => {
+      return acc || target.classList.contains(item);
+    }, false);
   }
 
+  _getSlideFromNavElement(target) {
+
+    // Slide Previews
+    if (typeof target.dataset.slide !== 'undefined') {
+      return parseInt(target.dataset.slide, 10);
+    }
+
+    // Arrow Nav Buttons
+    if (typeof target.dataset.direction !== 'undefined') {
+      switch(target.dataset.direction) {
+        case 'next': 
+          return this.nextIndex;
+        case 'previous':
+          return this.previousIndex;
+        default:
+          return 0;
+      }
+    }
+
+    return 0;
+  }
+
+  _prepareToMove(translateX, first, middle, last) {
+    this.translateX = translateX;
+    this._updateView([first, middle, last]);
+  }
+
+  /**
+   * 
+   * @param {number} newCurrentIndex 
+   */
+  _cleanupAfterMove(newCurrentIndex) {
+    this.preparing = false;
+    this.translateX = this.width;
+    this.currentIndex = newCurrentIndex;
+    this._updateView([this.previousIndex, this.currentIndex, this.nextIndex]);
+  }
+
+  /**
+   * 
+   * Matches the visible Slides with the indexes in the supplied array
+   * 
+   * @param {array} newSlides indexes of slides, that should be in view
+   */
+  _updateView(newSlides) {
+
+    this.visibleSlides = this.visibleSlides.map((slide, index) => {
+      slide.innerHTML = this.slides[newSlides[index]].innerHTML;
+      return slide;
+    });
+  }
+
+  /**
+   * 
+   * @param {number} slide 
+   */
   _getPreviewLink(slide) {
     return this.querySelector(`.slider__preview-link[data-slide="${slide}"]`);
   }
@@ -185,27 +282,21 @@ export default class Slider extends HTMLElement {
     previewLink.dataset.active = '';
   }
 
-  _moveSlideInner(to) {
-    this.slideInner.style.transform = `translateX(-${Math.min(this.maxDragWidth, Math.max(0, to))}px)`;
-  }
-
   _moveToSlide(elem) {
-    this.posX = elem * this.getBoundingClientRect().width;
-    this._moveSlideInner(this.width);
+    this.pageX = elem * this.getBoundingClientRect().width;
+    this.translateX = this.width;
   }
 
-  setPosX(pos) {
-    this.dragging = true;
-    this.posX = pos;
-    
+  _initView() {
+    this.preparing = true;
     window.requestAnimationFrame(() => {
-      this._updateView(this.previousIndex, this.currentIndex, this.nextIndex);
-      this._moveSlideInner(pos);
+      this._updateView([this.previousIndex, this.currentIndex, this.nextIndex]);
+      this.translateX = this.width;
 
       window.requestAnimationFrame(() => {
-        this.dragging = false;
-      })
-    })
+        this.preparing = false;
+      });
+    });
   }
 
   get maxDragWidth() {
@@ -236,15 +327,42 @@ export default class Slider extends HTMLElement {
     return 250;
   }
 
+  get dragging() {
+    return this.getAttribute('dragging');
+  }
+
   set dragging(value) {
     if (value) {
-      this.setAttribute('dragging');
+      this.setAttribute('dragging', value);
     } else {
       this.removeAttribute('dragging');
     }
   }
 
-  get dragging() {
-    return this.getAttribute('dragging');
+  get preparing() {
+    return this.getAttribute('preparing');
+  }
+
+  set preparing(value) {
+    if (value) {
+      this.setAttribute('preparing', value);
+    } else {
+      this.removeAttribute('preparing');
+    }
+  }
+
+  set translateX(to) {
+    this.slideInner.style.transform = `translateX(-${Math.min(this.maxDragWidth, Math.max(0, to))}px)`;
+  }
+
+  get translateX() {
+    const match=/translateX\(([-]?[0-9]+)px\)/;
+    const result = this.slideInner.style.transform.match(match);
+    if (result.length > 1) {
+      // Return first matching group of regex
+      return parseInt(result[1], 10);
+    }
+
+    return 0;
   }
 }
