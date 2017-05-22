@@ -15,6 +15,6 @@ app.use(sassMiddleware({
 app.use(express.static('public'));
 app.use(express.static('node_modules'));
 
-let server = app.listen(3000, '0.0.0.0', () => {
+let server = app.listen(3333, '0.0.0.0', () => {
   console.log(`API listening on http://${server.address().address}:${server.address().port}`);
 });

@@ -4,7 +4,8 @@
   "description": "js slider",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon index.js --ignore public/",
+    "start": "concurrently \"npm run watch\" \"npm run dev\" --names \"💻,📦\" --prefix name",
+    "watch": "nodemon index.js --ignore public/",
     "dev": "webpack -wd",
     "test": "echo \"Error: no test specified\" && exit 1",
     "production": "webpack -p"
@@ -17,12 +18,16 @@
   "author": "codingcircus",
   "license": "ISC",
   "dependencies": {
+    "babel-preset-stage-2": "^6.24.1",
     "webcomponentsjs": "^1.0.2"
   },
   "devDependencies": {
     "babel-cli": "^6.24.1",
     "babel-core": "^6.24.1",
     "babel-loader": "^7.0.0",
+    "babel-preset-env": "^1.5.0",
+    "babel-preset-es2017": "^6.24.1",
+    "concurrently": "^3.4.0",
     "css-loader": "^0.28.0",
     "express": "^4.15.2",
     "node-sass-middleware": "^0.11.0",
